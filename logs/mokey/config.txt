@@ -1,0 +1,16 @@
+loss = 12
+basedir = ./logs
+datadir = ./data/Ultra-NeRF/generated_liver_0501/train_views/all_train
+
+valdatadir = ./data/Ultra-NeRF/generated_liver_0501/test_views/l2
+testdatadir = ./data/Ultra-NeRF/generated_liver_0501/test_views/r2
+
+dataset_type = us
+no_batching = True
+output_ch = 3
+
+N_samples = 512
+
+i_embed = 6
+probe_depth = 100
+probe_width = 37
