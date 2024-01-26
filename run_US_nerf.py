@@ -9,6 +9,8 @@ from torchmetrics.image import MultiScaleStructuralSimilarityIndexMeasure as MS_
 import torch as tr
 from torch.autograd import Variable
 
+import imageio
+
 import load_US as US
 import render_method as rm
 import run_nerf_helper as rnh
@@ -414,6 +416,7 @@ def _train_yet():
         batch_rays = tr.stack([rays_o, rays_d], 0)
         
         loss = {}
+        loss_holdout = {}
     
         with tr.autograd.set_detect_anomaly(True):
             rendering_output = render_us(
@@ -465,6 +468,45 @@ def _train_yet():
             
             loss_string = "total loss = "
             for l_key, l_value in loss.items():
+                loss_string += f' + {l_value[0]} * {l_key}'
+                
+                writer.add_scalar(f'train/loss_{l_key}/', l_value[1], global_step=global_step)
+                writer.add_scalar(f'train/penalty_factor_{l_key}/', l_value[0], global_step=global_step)
+                writer.add_scalar(f'train/total_loss_{l_key}/', l_value[0] * l_value[1], global_step=global_step)
+            
+            writer.add_scalar('train/total_loss/', total_loss, global_step=global_step)     
+            print(loss_string)
+        if i % args.i_img == 0:
+            # Log a rendered validation view to Tensorboard
+            img_i = np.random.choice(i_val)
+            
+            target = tr.transpose(images[img_i])
+            pose = poses[img_i, :3, :4]
+            
+            rendering_output_test = render_us(H, W, sw, sh, c2w=pose, chunk=args.raychunk, rays=batch_rays, **render_kwargs_train)
+            
+            # TODO: Duplicaetes the loss calculation. Should be a function.
+            output_image_test = rendering_output_test['intensity_map']
+            
+            if args.loss == 'l2':
+                l2_intensity_loss = rnh.img2mse(output_image_test, target)
+                loss_holdout["l2"] = (1., l2_intensity_loss)
+            elif args.loss == 'ssim':
+                ms_ssim = MS_SSIM(kernel_size=args.ssim_filter_size, data_range=1.0, k1=0.01, k2=0.1)
+                ssim_intensity_loss = 1. - ms_ssim(output_image, target)
+                loss_holdout["ssim"] = (ssim_weight, ssim_intensity_loss)
+                
+                l2_intensity_loss = rnh.img2mse(output_image, target)
+                loss_holdout["l2"] = (l2_weight, l2_intensity_loss)
+
+            total_loss_holdout = sum(w * l for w, l in loss_holdout.values())
+            
+            # Save out the validation image for Tensorboard-free monitoring
+            test_img_dir = os.path.join(basedir, expname, 'rboard_val_imgs')
+            # if i==0:
+            os.makedirs(test_img_dir, exist_ok=True)
+            
+            imageio.imwrite(os.path.join(test_img_dir, '{:06d}.png'.format(i)), rnh.to8b(tr.transpose(output_image_test)))
             
             writer.close()
             
