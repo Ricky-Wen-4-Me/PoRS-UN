@@ -5,10 +5,10 @@ Yong-Jun Wen; Jenhui Chen
 in Proc. 2024 10th ICASI (Oral Presentation)
 
 # Setup
-`conda env create -f environment.yml`
-
-`conda activate NeSM`
-
+```javascript
+conda env create -f environment.yml
+conda activate NeSM
+```
 # Running code
 Training:
 
